@@ -1,0 +1,17 @@
+{
+  "name": "warranted-bot",
+  "version": "0.1.0",
+  "description": "Discord bot for the /warranted server",
+  "main": "index.js",
+  "type": "commonjs",
+  "scripts": {
+    "start": "node index.js",
+    "deploy": "node deploy-commands.js"
+  },
+  "dependencies": {
+    "@napi-rs/canvas": "^1.0.9",
+    "better-sqlite3": "^11.3.0",
+    "discord.js": "^14.16.3",
+    "dotenv": "^16.4.5"
+  }
+}
