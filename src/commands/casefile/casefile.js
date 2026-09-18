@@ -46,6 +46,13 @@ module.exports = {
         .addChannelTypes(ChannelType.GuildCategory)
         .setRequired(true)))
     .addSubcommand(sc => sc
+      .setName('transcriptchannel')
+      .setDescription('Set a dedicated channel for closed case transcripts (separate from general logs)')
+      .addChannelOption(o => o.setName('channel')
+        .setDescription('Channel for transcripts')
+        .addChannelTypes(ChannelType.GuildText)
+        .setRequired(true)))
+    .addSubcommand(sc => sc
       .setName('blacklistadd')
       .setDescription('Block a user from opening case files')
       .addUserOption(o => o.setName('user').setDescription('User to block').setRequired(true)))
@@ -118,6 +125,15 @@ module.exports = {
       const category = interaction.options.getChannel('category');
       upsertConfig(guildId, { ticket_category: category.id });
       return interaction.reply({ embeds: [successEmbed('CATEGORY SET', `New case files will be created under **${category.name}**.`)], ephemeral: true });
+    }
+
+    if (sub === 'transcriptchannel') {
+      const channel = interaction.options.getChannel('channel');
+      upsertConfig(guildId, { ticket_transcript_channel: channel.id });
+      return interaction.reply({
+        embeds: [successEmbed('TRANSCRIPT CHANNEL SET', `Closed case transcripts now post to ${channel} instead of the general wiretap log.`)],
+        ephemeral: true
+      });
     }
 
     if (sub === 'blacklistadd') {

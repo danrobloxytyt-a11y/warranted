@@ -21,7 +21,7 @@ module.exports = {
       },
       {
         name: 'Case Files',
-        value: '`/casefile panelcreate|optionadd|optionremove|staffrole|category|blacklistadd|blacklistremove`\n`/case add|remove|close|transcript`'
+        value: '`/casefile panelcreate|optionadd|optionremove|staffrole|category|transcriptchannel|blacklistadd|blacklistremove`\n`/case add|remove|close|transcript`'
       },
       {
         name: 'VoiceMaster',

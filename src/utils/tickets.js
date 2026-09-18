@@ -126,7 +126,8 @@ async function openTicket(interaction, optionRow) {
   });
 }
 
-async function generateTranscript(channel) {
+// Fetches up to 1000 messages from a ticket channel, oldest first.
+async function fetchAllMessages(channel) {
   let messages = [];
   let lastId;
 
@@ -139,33 +140,110 @@ async function generateTranscript(channel) {
   }
 
   messages.reverse();
+  return messages;
+}
+
+// Builds a readable transcript as Discord embeds — this is what actually
+// gets read. Chunked to stay well under Discord's per-embed (4096 char) and
+// per-message (6000 char total, 10 embeds max) limits, splitting into
+// multiple messages if a ticket ran unusually long.
+function buildTranscriptEmbeds(messages, channelName) {
+  if (messages.length === 0) {
+    return [[baseEmbed(config.colors.black).setTitle('TRANSCRIPT').setDescription('No messages were sent in this case.')]];
+  }
+
+  const lines = messages.map(m => {
+    const time = `<t:${Math.floor(m.createdTimestamp / 1000)}:t>`;
+    const content = m.content?.trim()
+      || (m.attachments.size > 0 ? `*[${m.attachments.size} attachment(s)]*` : '*[no text content]*');
+    return `**${m.author.tag}** • ${time}\n${content}`;
+  });
+
+  // Pack lines into ~1800-char embed chunks, then batch up to 10 embeds per message.
+  const embedChunks = [];
+  let current = '';
+  for (const line of lines) {
+    const candidate = current ? `${current}\n\n${line}` : line;
+    if (candidate.length > 1800) {
+      embedChunks.push(current);
+      current = line;
+    } else {
+      current = candidate;
+    }
+  }
+  if (current) embedChunks.push(current);
+
+  const embeds = embedChunks.map((desc, i) =>
+    baseEmbed(config.colors.black)
+      .setTitle(i === 0 ? `TRANSCRIPT — ${channelName}` : `TRANSCRIPT (cont.)`)
+      .setDescription(desc)
+  );
+
+  // Group into batches of 10 embeds — that's the max Discord allows per message.
+  const messageBatches = [];
+  for (let i = 0; i < embeds.length; i += 10) {
+    messageBatches.push(embeds.slice(i, i + 10));
+  }
+  return messageBatches;
+}
+
+// Full plain-text backup, still attached alongside the embeds — useful for
+// searching or archiving outside Discord, even though the embeds are what
+// staff will actually read.
+function buildTranscriptFile(messages, channelName) {
   const lines = messages.map(m => {
     const time = new Date(m.createdTimestamp).toISOString();
     return `[${time}] ${m.author.tag}: ${m.content}`;
   });
-
   const buffer = Buffer.from(lines.join('\n') || 'No messages.', 'utf-8');
-  return new AttachmentBuilder(buffer, { name: `${channel.name}-transcript.txt` });
+  return new AttachmentBuilder(buffer, { name: `${channelName}-transcript.txt` });
+}
+
+// Kept for /case transcript (grab a copy without closing) — returns just the
+// raw file, same as before, for anything that only wants the plain backup.
+async function generateTranscript(channel) {
+  const messages = await fetchAllMessages(channel);
+  return buildTranscriptFile(messages, channel.name);
+}
+
+// Full readable transcript build: fetches once, returns everything needed to
+// post both the readable embeds and the raw file backup.
+async function buildFullTranscript(channel) {
+  const messages = await fetchAllMessages(channel);
+  return {
+    embedBatches: buildTranscriptEmbeds(messages, channel.name),
+    file: buildTranscriptFile(messages, channel.name)
+  };
 }
 
 async function closeTicket(channel, closedByUser) {
   const ticket = db.prepare("SELECT * FROM tickets WHERE channel_id = ? AND status = 'open'").get(channel.id);
   if (!ticket) return null;
 
-  const transcript = await generateTranscript(channel);
+  const { embedBatches, file } = await buildFullTranscript(channel);
 
   const cfg = db.prepare('SELECT * FROM guild_config WHERE guild_id = ?').get(channel.guild.id);
-  if (cfg?.log_channel) {
-    const logChannel = channel.guild.channels.cache.get(cfg.log_channel);
-    if (logChannel) {
-      const embed = baseEmbed(config.colors.black)
+  const destinationId = cfg?.ticket_transcript_channel || cfg?.log_channel;
+
+  if (destinationId) {
+    const destChannel = channel.guild.channels.cache.get(destinationId);
+    if (destChannel) {
+      const summaryEmbed = baseEmbed(config.colors.black)
         .setTitle('CASE FILE CLOSED')
         .addFields(
           { name: 'Subject', value: `<@${ticket.opener_id}>`, inline: true },
           { name: 'Closed by', value: `${closedByUser}`, inline: true },
           { name: 'Type', value: ticket.option_label || 'N/A', inline: true }
         );
-      await logChannel.send({ embeds: [embed], files: [transcript] }).catch(() => {});
+      await destChannel.send({ embeds: [summaryEmbed] }).catch(() => {});
+
+      for (let i = 0; i < embedBatches.length; i++) {
+        const isLast = i === embedBatches.length - 1;
+        await destChannel.send({
+          embeds: embedBatches[i],
+          files: isLast ? [file] : []
+        }).catch(() => {});
+      }
     }
   }
 
@@ -175,4 +253,11 @@ async function closeTicket(channel, closedByUser) {
   return ticket;
 }
 
-module.exports = { buildPanelRow, refreshPanelMessage, openTicket, closeTicket, generateTranscript };
+module.exports = {
+  buildPanelRow,
+  refreshPanelMessage,
+  openTicket,
+  closeTicket,
+  generateTranscript,
+  buildFullTranscript
+};

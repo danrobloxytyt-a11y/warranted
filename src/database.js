@@ -121,7 +121,8 @@ const migrations = [
   'ALTER TABLE guild_config ADD COLUMN vm_join_channel TEXT',
   'ALTER TABLE guild_config ADD COLUMN evidence_channel TEXT',
   'ALTER TABLE guild_config ADD COLUMN evidence_emoji TEXT',
-  'ALTER TABLE guild_config ADD COLUMN evidence_threshold INTEGER'
+  'ALTER TABLE guild_config ADD COLUMN evidence_threshold INTEGER',
+  'ALTER TABLE guild_config ADD COLUMN ticket_transcript_channel TEXT'
 ];
 for (const sql of migrations) {
   try {

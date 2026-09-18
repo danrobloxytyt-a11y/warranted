@@ -1,6 +1,6 @@
 const { SlashCommandBuilder, PermissionFlagsBits } = require('discord.js');
 const { successEmbed, errorEmbed } = require('../../utils/embeds');
-const { closeTicket, generateTranscript } = require('../../utils/tickets');
+const { closeTicket, buildFullTranscript } = require('../../utils/tickets');
 const db = require('../../database');
 
 function getOpenTicket(channelId) {
@@ -84,8 +84,11 @@ module.exports = {
 
     if (sub === 'transcript') {
       await interaction.deferReply({ ephemeral: true });
-      const file = await generateTranscript(interaction.channel);
-      return interaction.editReply({ files: [file] });
+      const { embedBatches, file } = await buildFullTranscript(interaction.channel);
+      // Ephemeral replies are a single message, so show the first batch
+      // (up to 10 embeds) inline and attach the full plain-text file as
+      // backup in case the conversation ran longer than that.
+      return interaction.editReply({ embeds: embedBatches[0], files: [file] });
     }
 
     if (sub === 'close') {
