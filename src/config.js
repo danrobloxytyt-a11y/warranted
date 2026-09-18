@@ -9,7 +9,12 @@ module.exports = {
   // curve (5L^2 + 50L + 100) specifically so the top of the ladder takes
   // months of real activity, not days. See README "Tuning the grind" section
   // for the actual day-count math this was built from.
+  //
+  // Level 0 is special-cased to require exactly 0 XP — everyone starts there
+  // by definition. Without this, the raw formula returns 400 at level 0,
+  // which made new members' progress bars show negative numbers.
   xpForLevel(level) {
+    if (level <= 0) return 0;
     return 20 * (level ** 2) + 200 * level + 400;
   },
 
